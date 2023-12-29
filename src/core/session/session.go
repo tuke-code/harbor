@@ -16,13 +16,12 @@ package session
 
 import (
 	"context"
+	"errors"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/beego/beego/v2/server/web/session"
-	goredis "github.com/go-redis/redis/v8"
 
 	"github.com/goharbor/harbor/src/lib/cache"
 	"github.com/goharbor/harbor/src/lib/cache/redis"
@@ -47,7 +46,7 @@ type Store struct {
 }
 
 // Set value in redis session
-func (rs *Store) Set(ctx context.Context, key, value interface{}) error {
+func (rs *Store) Set(_ context.Context, key, value interface{}) error {
 	rs.lock.Lock()
 	defer rs.lock.Unlock()
 	rs.values[key] = value
@@ -55,7 +54,7 @@ func (rs *Store) Set(ctx context.Context, key, value interface{}) error {
 }
 
 // Get value in redis session
-func (rs *Store) Get(ctx context.Context, key interface{}) interface{} {
+func (rs *Store) Get(_ context.Context, key interface{}) interface{} {
 	rs.lock.RLock()
 	defer rs.lock.RUnlock()
 	if v, ok := rs.values[key]; ok {
@@ -65,7 +64,7 @@ func (rs *Store) Get(ctx context.Context, key interface{}) interface{} {
 }
 
 // Delete value in redis session
-func (rs *Store) Delete(ctx context.Context, key interface{}) error {
+func (rs *Store) Delete(_ context.Context, key interface{}) error {
 	rs.lock.Lock()
 	defer rs.lock.Unlock()
 	delete(rs.values, key)
@@ -73,7 +72,7 @@ func (rs *Store) Delete(ctx context.Context, key interface{}) error {
 }
 
 // Flush clear all values in redis session
-func (rs *Store) Flush(ctx context.Context) error {
+func (rs *Store) Flush(_ context.Context) error {
 	rs.lock.Lock()
 	defer rs.lock.Unlock()
 	rs.values = make(map[interface{}]interface{})
@@ -81,12 +80,12 @@ func (rs *Store) Flush(ctx context.Context) error {
 }
 
 // SessionID get redis session id
-func (rs *Store) SessionID(ctx context.Context) string {
+func (rs *Store) SessionID(_ context.Context) string {
 	return rs.sid
 }
 
 // SessionRelease save session values to redis
-func (rs *Store) SessionRelease(ctx context.Context, w http.ResponseWriter) {
+func (rs *Store) SessionRelease(ctx context.Context, _ http.ResponseWriter) {
 	b, err := session.EncodeGob(rs.values)
 	if err != nil {
 		return
@@ -131,7 +130,7 @@ func (rp *Provider) SessionRead(ctx context.Context, sid string) (session.Store,
 		ctx = context.TODO()
 	}
 	err := rp.c.Fetch(ctx, sid, &kv)
-	if err != nil && !strings.Contains(err.Error(), goredis.Nil.Error()) {
+	if err != nil && !errors.Is(err, cache.ErrNotFound) {
 		return nil, err
 	}
 
@@ -166,7 +165,7 @@ func (rp *Provider) SessionRegenerate(ctx context.Context, oldsid, sid string) (
 		} else {
 			kv := make(map[interface{}]interface{})
 			err := rp.c.Fetch(ctx, sid, &kv)
-			if err != nil && !strings.Contains(err.Error(), goredis.Nil.Error()) {
+			if err != nil && !errors.Is(err, cache.ErrNotFound) {
 				return nil, err
 			}
 
@@ -193,11 +192,11 @@ func (rp *Provider) SessionDestroy(ctx context.Context, sid string) error {
 }
 
 // SessionGC Implement method, no used.
-func (rp *Provider) SessionGC(ctx context.Context) {
+func (rp *Provider) SessionGC(_ context.Context) {
 }
 
 // SessionAll return all activeSession
-func (rp *Provider) SessionAll(ctx context.Context) int {
+func (rp *Provider) SessionAll(_ context.Context) int {
 	return 0
 }
 
