@@ -104,8 +104,8 @@ PREPARE_VERSION_NAME=versions
 
 #versions
 REGISTRYVERSION=v2.8.3-patch-redis
-TRIVYVERSION=v0.47.0
-TRIVYADAPTERVERSION=v0.30.19
+TRIVYVERSION=v0.49.1
+TRIVYADAPTERVERSION=v0.30.22
 
 # version of registry for pulling the source code
 REGISTRY_SRC_TAG=v2.8.3
@@ -451,16 +451,6 @@ package_offline: update_prepare_version compile build
 	@$(TARCMD) $(PACKAGE_OFFLINE_PARA)
 	@rm -rf $(HARBORPKG)
 	@echo "Done."
-
-gosec:
-	#go get github.com/securego/gosec/cmd/gosec
-	#go get github.com/dghubble/sling
-	@echo "run secure go scan ..."
-	@if [ "$(GOSECRESULTS)" != "" ] ; then \
-		$(GOPATH)/bin/gosec -fmt=json -out=$(GOSECRESULTS) -quiet ./... | true ; \
-	else \
-		$(GOPATH)/bin/gosec -fmt=json -out=harbor_gas_output.json -quiet ./... | true ; \
-	fi
 
 go_check: gen_apis mocks_check misspell commentfmt lint
 
