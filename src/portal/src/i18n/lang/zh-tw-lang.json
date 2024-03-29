@@ -285,7 +285,10 @@
     "PREVENT_VULNERABLE_2": "或更高危險級別的映像檔部署。",
     "SCAN": "弱點掃描",
     "AUTOSCAN_TOGGLE": "推送時自動掃描映像檔",
-    "AUTOSCAN_POLICY": "當映像檔推送到專案儲存庫時自動掃描。"
+    "AUTOSCAN_POLICY": "當映像檔推送到專案儲存庫時自動掃描。",
+    "SBOM": "SBOM generation",
+    "AUTOSBOM_TOGGLE": "Automatically generate SBOM on push",
+    "AUTOSBOM_POLICY": "Automatically generate SBOM when the images are pushed to the project registry."
   },
   "MEMBER": {
     "NEW_USER": "新增使用者成員",
@@ -1425,6 +1428,10 @@
     "NAME_REQUIRED": "名稱必填",
     "NAME_REX": "名稱必須由小寫字母、數字和 ._- 組成，至少2個字元，並且必須以字母或數字開頭。",
     "DESCRIPTION": "描述",
+    "SBOM": "SBOM",
+    "VULNERABILITY": "Vulnerability",
+    "SUPPORTED": "Supported",
+    "NOT_SUPPORTED": "Not Supported",
     "ENDPOINT": "端點",
     "ENDPOINT_EXISTS": "端點 URL 已存在",
     "ENDPOINT_REQUIRED": "端點 URL 必填",
