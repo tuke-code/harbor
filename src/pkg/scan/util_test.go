@@ -22,8 +22,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/goharbor/harbor/src/controller/robot"
-	rm "github.com/goharbor/harbor/src/pkg/robot/model"
+	"github.com/goharbor/harbor/src/pkg/robot/model"
 	v1sq "github.com/goharbor/harbor/src/pkg/scan/rest/v1"
 )
 
@@ -47,11 +46,9 @@ func TestGenAccessoryArt(t *testing.T) {
 			Digest:     "sha256:d37ada95d47ad12224c205a938129df7a3e52345828b4fa27b03a98825d1e2e7",
 		},
 	}
-	r := robot.Robot{
-		Robot: rm.Robot{
-			Name:   "admin",
-			Secret: "Harbor12345",
-		},
+	r := &model.Robot{
+		Name:   "admin",
+		Secret: "Harbor12345",
 	}
 
 	annotations := map[string]string{
@@ -60,5 +57,5 @@ func TestGenAccessoryArt(t *testing.T) {
 	}
 	s, err := GenAccessoryArt(sq, []byte(`{"name": "harborAccTest", "version": "1.0"}`), annotations, "application/vnd.goharbor.harbor.main.v1", r)
 	assert.Nil(t, err)
-	assert.Equal(t, "sha256:8de6104b79deca0253ff8667692f03e34753494c77ec81f631b45aad69223c18", s)
+	assert.Equal(t, "sha256:a39c6456d3cd1d87b7ee5706f67133d7a6d27a2dbc9ed66d50e504ff8920efc3", s)
 }

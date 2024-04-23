@@ -39,8 +39,14 @@ var (
 	// the media type of notation signature layer
 	mediaTypeNotationLayer = "application/vnd.cncf.notary.signature"
 
+	// cosign media type  in config layer, which would support in oci-spec1.1
+	mediaTypeCosignConfig = "application/vnd.dev.cosign.artifact.sig.v1+json"
+
 	// annotation of nydus image
 	layerAnnotationNydusBootstrap = "containerd.io/snapshot/nydus-bootstrap"
+
+	// media type of harbor sbom
+	mediaTypeHarborSBOM = "application/vnd.goharbor.harbor.sbom.v1"
 )
 
 /*
@@ -149,6 +155,10 @@ func Middleware() func(http.Handler) http.Handler {
 				}
 			case mediaTypeNotationLayer:
 				accData.Type = model.TypeNotationSignature
+			case mediaTypeCosignConfig:
+				accData.Type = model.TypeCosignSignature
+			case mediaTypeHarborSBOM:
+				accData.Type = model.TypeHarborSBOM
 			}
 			if subjectArt != nil {
 				accData.SubArtifactID = subjectArt.ID
