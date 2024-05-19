@@ -161,9 +161,6 @@ export class ArtifactListTabComponent implements OnInit, OnDestroy {
     get generateSbomBtnState(): ClrLoadingState {
         return this.artifactListPageService.getSbomBtnState();
     }
-    get projectScanner(): Scanner {
-        return this.artifactListPageService.getProjectScanner();
-    }
 
     onSendingScanCommand: boolean;
     onSendingStopScanCommand: boolean = false;
@@ -935,6 +932,14 @@ export class ArtifactListTabComponent implements OnInit, OnDestroy {
         return null;
     }
 
+    handleSbomOverview(sbomOverview: any): any {
+        if (sbomOverview) {
+            const keys = Object.keys(sbomOverview) ?? [];
+            return keys.length > 0 ? sbomOverview[keys[0]] : null;
+        }
+        return null;
+    }
+
     goIntoIndexArtifact(artifact: Artifact) {
         let depth: string = '';
         if (this.depth) {
@@ -984,6 +989,17 @@ export class ArtifactListTabComponent implements OnInit, OnDestroy {
         if (this.selectedRow && this.selectedRow.length) {
             for (let i = 0; i < this.selectedRow.length; i++) {
                 if (artifact.digest === this.selectedRow[i].digest) {
+                    if (artifact.sbom_overview) {
+                        this.selectedRow[i].sbom_overview =
+                            artifact.sbom_overview;
+                    }
+                    if (artifact.sbom_overview.sbom_digest) {
+                        this.selectedRow[i].sbomDigest =
+                            artifact.sbom_overview.sbom_digest;
+                    }
+                    if (artifact.accessories !== undefined) {
+                        this.selectedRow[i].accessories = artifact.accessories;
+                    }
                     this.selectedRow.splice(i, 1);
                     break;
                 }
@@ -1099,7 +1115,7 @@ export class ArtifactListTabComponent implements OnInit, OnDestroy {
                                         res?.filter(
                                             item =>
                                                 item.type === AccessoryType.SBOM
-                                        )?.[0]?.digest ?? null;
+                                        )?.[0]?.digest ?? undefined;
                                 }
                             },
                             error: err => {

@@ -52,7 +52,6 @@ import (
 	sbomModel "github.com/goharbor/harbor/src/pkg/scan/sbom/model"
 	"github.com/goharbor/harbor/src/pkg/scan/vuln"
 	"github.com/goharbor/harbor/src/pkg/task"
-	"github.com/goharbor/harbor/src/testing/controller/artifact"
 )
 
 var (
@@ -111,8 +110,6 @@ type basicController struct {
 	rc robot.Controller
 	// Tag controller
 	tagCtl tag.Controller
-	// Artifact controller
-	artCtl artifact.Controller
 	// UUID generator
 	uuid uuidGenerator
 	// Configuration getter func
@@ -196,6 +193,18 @@ func (bc *basicController) collectScanningArtifacts(ctx context.Context, r *scan
 			return err
 		}
 		if ok {
+			return nil
+		}
+
+		// because there are lots of in-toto sbom artifacts in dockerhub and replicated to Harbor, they are considered as image type
+		// when scanning these type of sbom artifact, the scanner might assume it is image layer with tgz format, and if scanner read the layer with a stream of tgz,
+		// it fail and close the stream abruptly and cause the pannic in the harbor core log
+		// to avoid pannic, skip scan the in-toto sbom artifact sbom artifact
+		unscannable, err := bc.ar.HasUnscannableLayer(ctx, a.Digest)
+		if err != nil {
+			return err
+		}
+		if unscannable {
 			return nil
 		}
 
@@ -751,11 +760,32 @@ func (bc *basicController) GetSBOMSummary(ctx context.Context, art *ar.Artifact,
 	reportContent := reports[0].Report
 	result := map[string]interface{}{}
 	if len(reportContent) == 0 {
-		log.Warning("no content for current report")
+		status := bc.retrieveStatusFromTask(ctx, reports[0].UUID)
+		if len(status) > 0 {
+			result[sbomModel.ReportID] = reports[0].UUID
+			result[sbomModel.ScanStatus] = status
+		}
+		log.Debug("no content for current report")
 		return result, nil
 	}
 	err = json.Unmarshal([]byte(reportContent), &result)
 	return result, err
+}
+
+// retrieve the status from task
+func (bc *basicController) retrieveStatusFromTask(ctx context.Context, reportID string) string {
+	if len(reportID) == 0 {
+		return ""
+	}
+	tasks, err := bc.taskMgr.ListScanTasksByReportUUID(ctx, reportID)
+	if err != nil {
+		log.Warningf("can not find the task with report UUID %v, error %v", reportID, err)
+		return ""
+	}
+	if len(tasks) > 0 {
+		return tasks[0].Status
+	}
+	return ""
 }
 
 // GetScanLog ...

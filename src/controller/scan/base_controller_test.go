@@ -70,9 +70,10 @@ type ControllerTestSuite struct {
 
 	tagCtl *tagtesting.FakeController
 
-	registration *scanner.Registration
-	artifact     *artifact.Artifact
-	rawReport    string
+	registration  *scanner.Registration
+	artifact      *artifact.Artifact
+	wrongArtifact *artifact.Artifact
+	rawReport     string
 
 	execMgr         *tasktesting.ExecutionManager
 	taskMgr         *tasktesting.Manager
@@ -100,6 +101,9 @@ func (suite *ControllerTestSuite) SetupSuite() {
 	suite.artifact.RepositoryName = "library/photon"
 	suite.artifact.Digest = "digest-code"
 	suite.artifact.ManifestMediaType = v1.MimeTypeDockerArtifact
+
+	suite.wrongArtifact = &artifact.Artifact{Artifact: art.Artifact{ID: 2, ProjectID: 1}}
+	suite.wrongArtifact.Digest = "digest-wrong"
 
 	m := &v1.ScannerAdapterMetadata{
 		Scanner: &v1.Scanner{
@@ -202,8 +206,11 @@ func (suite *ControllerTestSuite) SetupSuite() {
 			Report:           `{"sbom_digest": "sha256:1234567890", "scan_status": "Success", "duration": 3, "start_time": "2021-09-01T00:00:00Z", "end_time": "2021-09-01T00:00:03Z"}`,
 		},
 	}
+
+	emptySBOMReport := []*scan.Report{{Report: ``, UUID: "rp-uuid-004"}}
 	mgr.On("GetBy", mock.Anything, suite.artifact.Digest, suite.registration.UUID, []string{v1.MimeTypeNativeReport}).Return(reports, nil)
 	mgr.On("GetBy", mock.Anything, suite.artifact.Digest, suite.registration.UUID, []string{v1.MimeTypeSBOMReport}).Return(sbomReport, nil)
+	mgr.On("GetBy", mock.Anything, suite.wrongArtifact.Digest, suite.registration.UUID, []string{v1.MimeTypeSBOMReport}).Return(emptySBOMReport, nil)
 	mgr.On("Get", mock.Anything, "rp-uuid-001").Return(reports[0], nil)
 	mgr.On("UpdateReportData", "rp-uuid-001", suite.rawReport, (int64)(10000)).Return(nil)
 	mgr.On("UpdateStatus", "the-uuid-123", "Success", (int64)(10000)).Return(nil)
@@ -343,6 +350,7 @@ func (suite *ControllerTestSuite) TestScanControllerScan() {
 	{
 		// artifact not provieded
 		suite.Require().Error(suite.c.Scan(context.TODO(), nil))
+		mock.OnAnything(suite.ar, "HasUnscannableLayer").Return(false, nil).Times(3)
 	}
 
 	{
@@ -441,6 +449,7 @@ func (suite *ControllerTestSuite) TestScanControllerStop() {
 
 // TestScanControllerGetReport ...
 func (suite *ControllerTestSuite) TestScanControllerGetReport() {
+	mock.OnAnything(suite.ar, "HasUnscannableLayer").Return(false, nil).Once()
 	ctx := orm.NewContext(nil, &ormtesting.FakeOrmer{})
 	mock.OnAnything(suite.ar, "Walk").Return(nil).Run(func(args mock.Arguments) {
 		walkFn := args.Get(2).(func(*artifact.Artifact) error)
@@ -459,13 +468,13 @@ func (suite *ControllerTestSuite) TestScanControllerGetReport() {
 // TestScanControllerGetSummary ...
 func (suite *ControllerTestSuite) TestScanControllerGetSummary() {
 	ctx := orm.NewContext(nil, &ormtesting.FakeOrmer{})
+	mock.OnAnything(suite.ar, "HasUnscannableLayer").Return(false, nil).Once()
 	mock.OnAnything(suite.accessoryMgr, "List").Return([]accessoryModel.Accessory{}, nil).Once()
 	mock.OnAnything(suite.ar, "Walk").Return(nil).Run(func(args mock.Arguments) {
 		walkFn := args.Get(2).(func(*artifact.Artifact) error)
 		walkFn(suite.artifact)
 	}).Once()
 	mock.OnAnything(suite.taskMgr, "ListScanTasksByReportUUID").Return(nil, nil).Once()
-
 	sum, err := suite.c.GetSummary(ctx, suite.artifact, []string{v1.MimeTypeNativeReport})
 	require.NoError(suite.T(), err)
 	assert.Equal(suite.T(), 1, len(sum))
@@ -473,6 +482,7 @@ func (suite *ControllerTestSuite) TestScanControllerGetSummary() {
 
 // TestScanControllerGetScanLog ...
 func (suite *ControllerTestSuite) TestScanControllerGetScanLog() {
+	mock.OnAnything(suite.ar, "HasUnscannableLayer").Return(false, nil).Once()
 	ctx := orm.NewContext(nil, &ormtesting.FakeOrmer{})
 	mock.OnAnything(suite.taskMgr, "ListScanTasksByReportUUID").Return([]*task.Task{
 		{
@@ -493,6 +503,7 @@ func (suite *ControllerTestSuite) TestScanControllerGetScanLog() {
 
 func (suite *ControllerTestSuite) TestScanControllerGetMultiScanLog() {
 	ctx := orm.NewContext(nil, &ormtesting.FakeOrmer{})
+	mock.OnAnything(suite.ar, "HasUnscannableLayer").Return(false, nil).Times(4)
 	suite.taskMgr.On("ListScanTasksByReportUUID", ctx, "rp-uuid-001").Return([]*task.Task{
 		{
 			ID:         1,
@@ -555,7 +566,7 @@ func (suite *ControllerTestSuite) TestScanAll() {
 	{
 		// no artifacts found when scan all
 		executionID := int64(1)
-
+		mock.OnAnything(suite.ar, "HasUnscannableLayer").Return(false, nil).Once()
 		suite.execMgr.On(
 			"Create", mock.Anything, "SCAN_ALL", int64(0), "SCHEDULE",
 			mock.Anything).Return(executionID, nil).Once()
@@ -654,6 +665,12 @@ func (suite *ControllerTestSuite) TestGenerateSBOMSummary() {
 	suite.NotNil(dgst)
 	suite.Equal("Success", status)
 	suite.Equal("sha256:1234567890", dgst)
+	tasks := []*task.Task{{Status: "Error"}}
+	suite.taskMgr.On("ListScanTasksByReportUUID", mock.Anything, "rp-uuid-004").Return(tasks, nil).Once()
+	sum2, err := suite.c.GetSummary(context.TODO(), suite.wrongArtifact, []string{v1.MimeTypeSBOMReport})
+	suite.Nil(err)
+	suite.NotNil(sum2)
+
 }
 
 func TestIsSBOMMimeTypes(t *testing.T) {
@@ -683,5 +700,11 @@ func (suite *ControllerTestSuite) TestDeleteArtifactAccessories() {
 	}
 	ctx := orm.NewContext(nil, &ormtesting.FakeOrmer{})
 	suite.NoError(suite.c.deleteArtifactAccessories(ctx, reports))
+}
 
+func (suite *ControllerTestSuite) TestRetrieveStatusFromTask() {
+	tasks := []*task.Task{{Status: "Error"}}
+	suite.taskMgr.On("ListScanTasksByReportUUID", mock.Anything, "rp-uuid-004").Return(tasks, nil).Once()
+	status := suite.c.retrieveStatusFromTask(nil, "rp-uuid-004")
+	suite.Equal("Error", status)
 }

@@ -407,6 +407,7 @@
         "REPOSITORY": "Repository",
         "ARTIFACT": "Artifact",
         "SCAN": "Scan",
+        "SBOM": "SBOM",
         "TAG": "Tag",
         "ACCESSORY": "Accessory",
         "ARTIFACT_ADDITION": "Artifact Addition",
@@ -1056,11 +1057,12 @@
         },
         "NO_SBOM": "No SBOM",
         "PACKAGES": "SBOM",
+        "COMPLETED": "Completed",
         "REPORTED_BY": "Reported by {{scanner}}",
         "GENERATE": "Generate SBOM",
         "DOWNLOAD": "Download SBOM",
         "Details": "SBOM details",
-        "STOP": "Stop SBOM",
+        "STOP": "Stop Generate SBOM",
         "TRIGGER_STOP_SUCCESS": "Trigger stopping SBOM generation successfully"
     },
     "VULNERABILITY": {
