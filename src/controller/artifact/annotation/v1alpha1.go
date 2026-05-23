@@ -66,8 +66,7 @@ func parseV1alpha1SkipList(artifact *artifact.Artifact, manifest *v1.Manifest) {
 	skipListAnnotationKey := fmt.Sprintf("%s.%s.%s", AnnotationPrefix, V1alpha1, SkipList)
 	skipList, ok := manifest.Config.Annotations[skipListAnnotationKey]
 	if ok {
-		skipKeyList := strings.Split(skipList, ",")
-		for _, skipKey := range skipKeyList {
+		for skipKey := range strings.SplitSeq(skipList, ",") {
 			delete(metadata, skipKey)
 		}
 		artifact.ExtraAttrs = metadata
@@ -106,7 +105,7 @@ func parseV1alpha1Icon(artifact *artifact.Artifact, manifest *v1.Manifest, reg r
 	switch contentType {
 	case GIF, PNG, JPEG:
 	default:
-		return errors.New(nil).WithCode(errors.BadRequestCode).WithMessage("unsupported content type: %s", contentType)
+		return errors.New(nil).WithCode(errors.BadRequestCode).WithMessagef("unsupported content type: %s", contentType)
 	}
 	artifact.Icon = iconDigest
 	return nil

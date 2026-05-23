@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package user
+package user // nolint:revive
 
 import (
 	"context"
@@ -65,6 +65,8 @@ type Manager interface {
 	Onboard(ctx context.Context, user *commonmodels.User) error
 	// GenerateCheckSum generates truncated crc32 checksum from a given string
 	GenerateCheckSum(in string) string
+	// SearchByName searches users by names with fuzzy search
+	SearchByName(ctx context.Context, name string, limitSize int) (commonmodels.Users, error)
 }
 
 // New returns a default implementation of Manager
@@ -182,7 +184,7 @@ func (m *manager) Get(ctx context.Context, id int) (*commonmodels.User, error) {
 	}
 
 	if len(users) == 0 {
-		return nil, errors.NotFoundError(nil).WithMessage("user %d not found", id)
+		return nil, errors.NotFoundError(nil).WithMessagef("user %d not found", id)
 	}
 
 	return users[0], nil
@@ -196,7 +198,7 @@ func (m *manager) GetByName(ctx context.Context, username string) (*commonmodels
 	}
 
 	if len(users) == 0 {
-		return nil, errors.NotFoundError(nil).WithMessage("user %s not found", username)
+		return nil, errors.NotFoundError(nil).WithMessagef("user %s not found", username)
 	}
 
 	return users[0], nil
@@ -243,4 +245,8 @@ func injectPasswd(u *commonmodels.User, password string) {
 	u.Password = utils.Encrypt(password, salt, utils.SHA256)
 	u.Salt = salt
 	u.PasswordVersion = utils.SHA256
+}
+
+func (m *manager) SearchByName(ctx context.Context, name string, limitSize int) (commonmodels.Users, error) {
+	return m.dao.SearchByName(ctx, name, limitSize)
 }

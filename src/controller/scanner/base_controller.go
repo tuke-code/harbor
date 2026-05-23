@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package scanner
+package scanner // nolint:revive
 
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -35,8 +36,8 @@ import (
 
 const (
 	proScannerMetaKey = "projectScanner"
-	statusUnhealthy   = "unhealthy"
-	statusHealthy     = "healthy"
+	StatusUnhealthy   = "unhealthy"
+	StatusHealthy     = "healthy"
 	// RetrieveCapFailMsg the message indicate failed to retrieve the scanner capabilities
 	RetrieveCapFailMsg = "failed to retrieve scanner capabilities, error %v"
 )
@@ -98,7 +99,7 @@ func (bc *basicController) GetTotalOfRegistrations(ctx context.Context, query *q
 // CreateRegistration ...
 func (bc *basicController) CreateRegistration(ctx context.Context, registration *scanner.Registration) (string, error) {
 	if isReservedName(registration.Name) {
-		return "", errors.BadRequestError(nil).WithMessage(`name "%s" is reserved, please try a different name`, registration.Name)
+		return "", errors.BadRequestError(nil).WithMessagef(`name "%s" is reserved, please try a different name`, registration.Name)
 	}
 
 	// Check if the registration is available
@@ -168,7 +169,7 @@ func (bc *basicController) UpdateRegistration(ctx context.Context, registration 
 	}
 
 	if isReservedName(registration.Name) {
-		return errors.BadRequestError(nil).WithMessage(`name "%s" is reserved, please try a different name`, registration.Name)
+		return errors.BadRequestError(nil).WithMessagef(`name "%s" is reserved, please try a different name`, registration.Name)
 	}
 
 	return bc.manager.Update(ctx, registration)
@@ -286,9 +287,9 @@ func (bc *basicController) GetRegistrationByProject(ctx context.Context, project
 		if err != nil {
 			// Not blocked, just logged it
 			log.Error(errors.Wrap(err, "api controller: get project scanner"))
-			registration.Health = statusUnhealthy
+			registration.Health = StatusUnhealthy
 		} else {
-			registration.Health = statusHealthy
+			registration.Health = StatusHealthy
 			// Fill in some metadata
 			registration.Adapter = meta.Scanner.Name
 			registration.Vendor = meta.Scanner.Vendor
@@ -343,7 +344,7 @@ func (bc *basicController) GetMetadata(ctx context.Context, registrationUUID str
 	}
 
 	if r == nil {
-		return nil, errors.NotFoundError(nil).WithMessage("registration %s not found", registrationUUID)
+		return nil, errors.NotFoundError(nil).WithMessagef("registration %s not found", registrationUUID)
 	}
 
 	return bc.Ping(ctx, r)
@@ -362,7 +363,7 @@ func (bc *basicController) getScannerAdapterMetadataWithCache(ctx context.Contex
 	key := fmt.Sprintf("reg:%d:metadata", registration.ID)
 
 	var result MetadataResult
-	err := cache.FetchOrSave(ctx, bc.Cache(), key, &result, func() (interface{}, error) {
+	err := cache.FetchOrSave(ctx, bc.Cache(), key, &result, func() (any, error) {
 		meta, err := bc.getScannerAdapterMetadata(registration)
 		if err != nil {
 			return &MetadataResult{Error: err.Error()}, nil
@@ -383,13 +384,7 @@ var (
 )
 
 func isReservedName(name string) bool {
-	for _, reservedName := range reservedNames {
-		if name == reservedName {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(reservedNames, name)
 }
 
 // MetadataResult metadata or error saved in cache
@@ -402,7 +397,7 @@ type MetadataResult struct {
 func (m *MetadataResult) Unpack() (*v1.ScannerAdapterMetadata, error) {
 	var err error
 	if m.Error != "" {
-		err = fmt.Errorf(m.Error)
+		err = errors.New(nil).WithMessage(m.Error)
 	}
 
 	return m.Metadata, err

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package user
+package user // nolint:revive
 
 import (
 	"context"
@@ -71,6 +71,8 @@ type Controller interface {
 	// OnboardOIDCUser inserts the record for basic user info and the oidc metadata
 	// if the onboard process is successful the input parm of user model will be populated with user id
 	OnboardOIDCUser(ctx context.Context, u *commonmodels.User) error
+	// SearchByName search user by name with fuzzy search
+	SearchByName(ctx context.Context, name string, limitSize int) ([]*commonmodels.User, error)
 }
 
 // NewController ...
@@ -178,17 +180,17 @@ func (c *controller) Count(ctx context.Context, query *q.Query) (int64, error) {
 func (c *controller) Delete(ctx context.Context, id int) error {
 	// cleanup project member with the user
 	if err := c.memberMgr.DeleteMemberByUserID(ctx, id); err != nil {
-		return errors.UnknownError(err).WithMessage("delete user failed, user id: %v, cannot delete project user member, error:%v", id, err)
+		return errors.UnknownError(err).WithMessagef("delete user failed, user id: %v, cannot delete project user member, error:%v", id, err)
 	}
 	// delete oidc metadata under the user
 	if lib.GetAuthMode(ctx) == common.OIDCAuth {
 		if err := c.oidcMetaMgr.DeleteByUserID(ctx, id); err != nil {
-			return errors.UnknownError(err).WithMessage("delete user failed, user id: %v, cannot delete oidc user, error:%v", id, err)
+			return errors.UnknownError(err).WithMessagef("delete user failed, user id: %v, cannot delete oidc user, error:%v", id, err)
 		}
 	}
 	gdprSetting, err := config.GDPRSetting(ctx)
 	if err != nil {
-		return errors.UnknownError(err).WithMessage("failed to load GDPR setting: %v", err)
+		return errors.UnknownError(err).WithMessagef("failed to load GDPR setting: %v", err)
 	}
 
 	if gdprSetting.AuditLogs {
@@ -196,7 +198,7 @@ func (c *controller) Delete(ctx context.Context, id int) error {
 		if err != nil {
 			return errors.Wrap(err, "unable to get user information")
 		}
-		params := map[string]interface{}{
+		params := map[string]any{
 			gdpr.UserNameParam: userDb.Username,
 		}
 		execID, err := c.exeMgr.Create(ctx, job.AuditLogsGDPRCompliantVendorType, -1, task.ExecutionTriggerEvent, params)
@@ -240,4 +242,8 @@ func (c *controller) VerifyPassword(ctx context.Context, usernameOrEmail, passwo
 
 func (c *controller) SetSysAdmin(ctx context.Context, id int, adminFlag bool) error {
 	return c.mgr.SetSysAdminFlag(ctx, id, adminFlag)
+}
+
+func (c *controller) SearchByName(ctx context.Context, name string, limitSize int) ([]*commonmodels.User, error) {
+	return c.mgr.SearchByName(ctx, name, limitSize)
 }

@@ -42,8 +42,8 @@ import (
 type gcTestSuite struct {
 	htesting.Suite
 	artifactCtl       *artifacttesting.Controller
-	artrashMgr        *trashtesting.FakeManager
-	registryCtlClient *registryctl.Mockclient
+	artrashMgr        *trashtesting.Manager
+	registryCtlClient *registryctl.Client
 	projectCtl        *projecttesting.Controller
 	blobMgr           *blob.Manager
 
@@ -54,8 +54,8 @@ type gcTestSuite struct {
 
 func (suite *gcTestSuite) SetupTest() {
 	suite.artifactCtl = &artifacttesting.Controller{}
-	suite.artrashMgr = &trashtesting.FakeManager{}
-	suite.registryCtlClient = &registryctl.Mockclient{}
+	suite.artrashMgr = &trashtesting.Manager{}
+	suite.registryCtlClient = &registryctl.Client{}
 	suite.blobMgr = &blob.Manager{}
 	suite.projectCtl = &projecttesting.Controller{}
 
@@ -98,7 +98,7 @@ func (suite *gcTestSuite) TestDeletedArt() {
 		},
 	}, nil)
 	suite.artifactCtl.On("Delete").Return(nil)
-	suite.artrashMgr.On("Filter").Return([]model.ArtifactTrash{
+	mock.OnAnything(suite.artrashMgr, "Filter").Return([]model.ArtifactTrash{
 		{
 			ID:                1,
 			Digest:            suite.DigestString(),
@@ -157,35 +157,44 @@ func (suite *gcTestSuite) TestInit() {
 	gc := &GarbageCollector{
 		registryCtlClient: suite.registryCtlClient,
 	}
-	params := map[string]interface{}{
+	params := map[string]any{
 		"delete_untagged": true,
+		"delete_tag":      true,
 		"redis_url_reg":   "redis url",
 		"time_window":     1,
 		"workers":         float64(3),
 	}
+
+	mock.OnAnything(gc.registryCtlClient, "Health").Return(nil)
 	suite.Nil(gc.init(ctx, params))
 	suite.True(gc.deleteUntagged)
+	suite.True(gc.deleteTag)
 	suite.Equal(3, gc.workers)
 
-	params = map[string]interface{}{
+	params = map[string]any{
 		"delete_untagged": "unsupported",
+		"delete_tag":      "unsupported",
 		"redis_url_reg":   "redis url",
 	}
 	suite.Nil(gc.init(ctx, params))
 	suite.True(gc.deleteUntagged)
+	suite.True(gc.deleteTag)
 
-	params = map[string]interface{}{
+	params = map[string]any{
 		"delete_untagged": false,
+		"delete_tag":      false,
 		"redis_url_reg":   "redis url",
 	}
 	suite.Nil(gc.init(ctx, params))
 	suite.False(gc.deleteUntagged)
+	suite.False(gc.deleteTag)
 
-	params = map[string]interface{}{
+	params = map[string]any{
 		"redis_url_reg": "redis url",
 	}
 	suite.Nil(gc.init(ctx, params))
 	suite.True(gc.deleteUntagged)
+	suite.True(gc.deleteTag)
 }
 
 func (suite *gcTestSuite) TestStop() {
@@ -208,6 +217,7 @@ func (suite *gcTestSuite) TestStop() {
 		registryCtlClient: suite.registryCtlClient,
 		artCtl:            suite.artifactCtl,
 		deleteUntagged:    true,
+		deleteTag:         true,
 	}
 
 	suite.Equal(errGcStop, gc.mark(ctx))
@@ -230,7 +240,7 @@ func (suite *gcTestSuite) TestRun() {
 		},
 	}, nil)
 	suite.artifactCtl.On("Delete").Return(nil)
-	suite.artrashMgr.On("Filter").Return([]model.ArtifactTrash{}, nil)
+	mock.OnAnything(suite.artrashMgr, "Filter").Return([]model.ArtifactTrash{}, nil)
 
 	mock.OnAnything(suite.projectCtl, "List").Return([]*proModels.Project{
 		{
@@ -271,19 +281,22 @@ func (suite *gcTestSuite) TestRun() {
 
 	mock.OnAnything(suite.blobMgr, "Delete").Return(nil)
 
+	mock.OnAnything(suite.registryCtlClient, "Health").Return(nil)
+
 	gc := &GarbageCollector{
 		artCtl:            suite.artifactCtl,
 		artrashMgr:        suite.artrashMgr,
 		blobMgr:           suite.blobMgr,
 		registryCtlClient: suite.registryCtlClient,
 	}
-	params := map[string]interface{}{
+	params := map[string]any{
 		"delete_untagged": false,
 		"redis_url_reg":   tests.GetRedisURL(),
 		"time_window":     1,
 		"workers":         3,
 	}
 
+	mock.OnAnything(gc.registryCtlClient, "DeleteBlob").Return(nil)
 	suite.Nil(gc.Run(ctx, params))
 }
 
@@ -302,7 +315,7 @@ func (suite *gcTestSuite) TestMark() {
 		},
 	}, nil)
 	suite.artifactCtl.On("Delete").Return(nil)
-	suite.artrashMgr.On("Filter").Return([]model.ArtifactTrash{
+	mock.OnAnything(suite.artrashMgr, "Filter").Return([]model.ArtifactTrash{
 		{
 			ID:                1,
 			Digest:            suite.DigestString(),
@@ -381,6 +394,7 @@ func (suite *gcTestSuite) TestSweep() {
 		workers: 3,
 	}
 
+	mock.OnAnything(gc.registryCtlClient, "DeleteBlob").Return(nil)
 	suite.Nil(gc.sweep(ctx))
 }
 
@@ -390,6 +404,33 @@ func (suite *gcTestSuite) TestSaveRes() {
 	ctx.On("GetLogger").Return(logger)
 	mock.OnAnything(ctx, "Checkin").Return(nil)
 	suite.Nil(saveGCRes(ctx, 123456, 100, 100))
+}
+
+func (suite *gcTestSuite) TestFormatSize() {
+	tests := []struct {
+		name     string
+		size     int64
+		expected string
+	}{
+		{name: "zero bytes", size: 0, expected: "0 B"},
+		{name: "500 bytes", size: 500, expected: "500 B"},
+		{name: "1 KiB", size: 1024, expected: "1.00 KiB"},
+		{name: "1.5 KiB", size: 1536, expected: "1.50 KiB"},
+		{name: "1 MiB", size: 1048576, expected: "1.00 MiB"},
+		{name: "2.5 MiB", size: 2621440, expected: "2.50 MiB"},
+		{name: "1 GiB", size: 1073741824, expected: "1.00 GiB"},
+		{name: "3.5 GiB", size: 3758096384, expected: "3.50 GiB"},
+		{name: "1 TiB", size: 1099511627776, expected: "1.00 TiB"},
+		{name: "2 TiB", size: 2199023255552, expected: "2.00 TiB"},
+		// truncation: 1615981465 / 1024^3 = 1.5049... → should be "1.50 GiB", not "1.51 GiB"
+		{name: "truncation GiB", size: 1615981465, expected: "1.50 GiB"},
+		// truncation: 1579520 / 1024^2 = 1.50625 → should be "1.50 MiB", not "1.51 MiB"
+		{name: "truncation MiB", size: 1579520, expected: "1.50 MiB"},
+	}
+
+	for _, tc := range tests {
+		suite.Equal(tc.expected, formatSize(tc.size), tc.name)
+	}
 }
 
 func TestGCTestSuite(t *testing.T) {

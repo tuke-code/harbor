@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package scanner
+package scanner // nolint:revive
 
 import (
 	"context"
@@ -154,7 +154,7 @@ func SetDefaultRegistration(ctx context.Context, UUID string) error {
 			return err
 		}
 		if count == 0 {
-			return errors.NotFoundError(nil).WithMessage("registration %s not found", UUID)
+			return errors.NotFoundError(nil).WithMessagef("registration %s not found", UUID)
 		}
 
 		qt2 := o.QueryTable(new(Registration))

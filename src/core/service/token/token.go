@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package token
+package token // nolint:revive
 
 import (
 	"fmt"
@@ -39,7 +39,7 @@ func (h *Handler) Get() {
 	tokenCreator, ok := creatorMap[service]
 	if !ok {
 		errMsg := fmt.Sprintf("Unable to handle service: %s", service)
-		log.Errorf(errMsg)
+		log.Error(errMsg)
 		h.CustomAbort(http.StatusBadRequest, template.HTMLEscapeString(errMsg))
 	}
 	token, err := tokenCreator.Create(request)

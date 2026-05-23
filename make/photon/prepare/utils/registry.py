@@ -47,14 +47,35 @@ def parse_redis(redis_url):
         return {
             'redis_host': u.netloc.split('@')[-1],
             'redis_password': '' if u.password is None else unquote(u.password),
+            'redis_username': '' if u.username is None else unquote(u.username),
             'redis_db_index_reg': u.path and int(u.path[1:]) or 0,
+            'redis_enableTLS': 'false',
+        }
+    elif u.scheme == 'rediss':
+        return {
+            'redis_host': u.netloc.split('@')[-1],
+            'redis_password': '' if u.password is None else unquote(u.password),
+            'redis_username': '' if u.username is None else unquote(u.username),
+            'redis_db_index_reg': u.path and int(u.path[1:]) or 0,
+            'redis_enableTLS': 'true',
         }
     elif u.scheme == 'redis+sentinel':
         return {
             'sentinel_master_set': u.path.split('/')[1],
             'redis_host': u.netloc.split('@')[-1],
             'redis_password': '' if u.password is None else unquote(u.password),
+            'redis_username': '' if u.username is None else unquote(u.username),
             'redis_db_index_reg': len(u.path.split('/')) == 3 and int(u.path.split('/')[2]) or 0,
+            'redis_enableTLS': 'false',
+        }
+    elif u.scheme == 'rediss+sentinel':
+        return {
+            'sentinel_master_set': u.path.split('/')[1],
+            'redis_host': u.netloc.split('@')[-1],
+            'redis_password': '' if u.password is None else unquote(u.password),
+            'redis_username': '' if u.username is None else unquote(u.username),
+            'redis_db_index_reg': len(u.path.split('/')) == 3 and int(u.path.split('/')[2]) or 0,
+            'redis_enableTLS': 'true',
         }
     else:
         raise Exception('bad redis url for registry:' + redis_url)

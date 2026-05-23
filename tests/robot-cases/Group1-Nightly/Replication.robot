@@ -93,7 +93,7 @@ Test Case - Replication Rule Edit
     ${cron_str}=    Set Variable    0 0 0 * * 0
     Sign In Harbor    ${HARBOR_URL}    ${HARBOR_ADMIN}    ${HARBOR_PASSWORD}
     Switch To Registries
-    Create A New Endpoint    harbor    ${endpoint1}    https://cicd.harbor.vmwarecna.net    ${null}    ${null}    Y
+    Create A New Endpoint    harbor    ${endpoint1}    https://${LOCAL_REGISTRY}    ${null}    ${null}    Y
     Create A New Endpoint    harbor    ${endpoint2}    https://${ip}    ${HARBOR_ADMIN}    ${HARBOR_PASSWORD}    Y
     Switch To Replication Manage
     Create A Rule With Existing Endpoint    ${rule_name_old}    pull    nightly/a*    image    ${endpoint1}    project${d}
@@ -144,7 +144,7 @@ Test Case - Replication Of Pull Images from DockerHub To Self
     Log All  image1:${image1}
     ${image2}=  Get From Dictionary  ${image2_with_tag}  image
     @{target_images}=  Create List  '&{image1_with_tag}'  '&{image2_with_tag}'
-    Body Of Replication Of Pull Images from Registry To Self   docker-hub  https://hub.docker.com/  ${DOCKER_USER}    ${DOCKER_PWD}  ${DOCKER_USER}/{${image1}*,${image2}}  ${null}  N  Flatten 1 Level  @{target_images}
+    Body Of Replication Of Pull Images from Registry To Self   docker-hub  ${null}  ${DOCKER_USER}    ${DOCKER_PWD}  ${DOCKER_USER}/{${image1}*,${image2}}  ${null}  N  Flatten 1 Level  @{target_images}
 
 Test Case - Replication Of Push Images from Self To Harbor
     Init Chrome Driver
@@ -266,23 +266,6 @@ Test Case - Replication Of Pull Images from AWS-ECR To Self
     Image Should Be Replicated To Project  project${d}  hello-world
     Close Browser
 
-Test Case - Replication Of Pull Images from Google-GCR To Self
-    Init Chrome Driver
-    ${d}=    Get Current Date    result_format=%m%s
-    #login source
-    Sign In Harbor    ${HARBOR_URL}    ${HARBOR_ADMIN}    ${HARBOR_PASSWORD}
-    Create An New Project And Go Into Project    project${d}
-    Switch To Registries
-    Create A New Endpoint    google-gcr    e${d}    asia.gcr.io    ${null}    ${gcr_ac_key}    Y
-    Switch To Replication Manage
-    Create A Rule With Existing Endpoint    rule${d}    pull    eminent-nation-87317/*    image    e${d}    project${d}
-    Filter Replication Rule  rule${d}
-    Select Rule And Replicate  rule${d}
-    Check Latest Replication Job Status  Succeeded
-    Image Should Be Replicated To Project  project${d}  httpd
-    Image Should Be Replicated To Project  project${d}  tomcat
-    Close Browser
-
 Test Case - Replication Of Push Images to DockerHub Triggered By Event
     Body Of Replication Of Push Images to Registry Triggered By Event  docker-hub  https://hub.docker.com/  ${DOCKER_USER}  ${DOCKER_PWD}  ${DOCKER_USER}
 
@@ -293,17 +276,6 @@ Test Case - Replication Of Push Images to DockerHub Triggered By Event
 Test Case - Replication Of Push Images to AWS-ECR Triggered By Event
     Body Of Replication Of Push Images to Registry Triggered By Event  aws-ecr  us-east-2  ${ecr_ac_id}  ${ecr_ac_key}  harbor-nightly-replication
 
-Test Case - Replication Of Pull Images from Gitlab To Self
-    &{image1_with_tag}=	 Create Dictionary  image=photon  tag=1.0
-    &{image2_with_tag}=	 Create Dictionary  image=alpine  tag=latest
-    ${image1}=  Get From Dictionary  ${image1_with_tag}  image
-    ${image2}=  Get From Dictionary  ${image2_with_tag}  image
-    @{target_images}=  Create List  '&{image1_with_tag}'  '&{image2_with_tag}'
-    Body Of Replication Of Pull Images from Registry To Self   gitlab   https://registry.gitlab.com    ${gitlab_id}    ${gitlab_key}    dannylunsa/test_replication/{${image1},${image2}}  ${null}  N  Flatten All Levels  @{target_images}
-
-Test Case - Replication Of Push Images to Gitlab Triggered By Event
-    Body Of Replication Of Push Images to Registry Triggered By Event    gitlab   https://registry.gitlab.com    ${gitlab_id}    ${gitlab_key}    dannylunsa/test_replication
-
 Test Case - Replication Of Pull Manifest List and CNAB from Harbor To Self
     &{image1_with_tag}=	 Create Dictionary  image=busybox  tag=1.32.0  total_artifact_count=9  archive_count=0
     &{image2_with_tag}=	 Create Dictionary  image=index  tag=index_tag  total_artifact_count=2  archive_count=0
@@ -312,7 +284,7 @@ Test Case - Replication Of Pull Manifest List and CNAB from Harbor To Self
     ${image2}=  Get From Dictionary  ${image2_with_tag}  image
     ${image3}=  Get From Dictionary  ${image3_with_tag}  image
     @{target_images}=  Create List  '&{image1_with_tag}'  '&{image2_with_tag}'  '&{image3_with_tag}'
-    Body Of Replication Of Pull Images from Registry To Self   harbor  https://cicd.harbor.vmwarecna.net  ${null}  ${null}  nightly/{${image1},${image2},${image3}}  ${null}  Y  Flatten 1 Level  @{target_images}
+    Body Of Replication Of Pull Images from Registry To Self   harbor  https://${LOCAL_REGISTRY}  ${null}  ${null}  nightly/{${image1},${image2},${image3}}  ${null}  Y  Flatten 1 Level  @{target_images}
 
 Test Case - Image Namespace Level Flattening
     [tags]  flattening

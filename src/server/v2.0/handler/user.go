@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -200,7 +199,7 @@ func (u *usersAPI) GetCurrentUserInfo(ctx context.Context, _ operation.GetCurren
 	sctx, _ := security.FromContext(ctx)
 	lsc, ok := sctx.(*local.SecurityContext)
 	if !ok {
-		return u.SendError(ctx, errors.PreconditionFailedError(nil).WithMessage("get current user not available for security context: %s", sctx.Name()))
+		return u.SendError(ctx, errors.PreconditionFailedError(nil).WithMessagef("get current user not available for security context: %s", sctx.Name()))
 	}
 	resp, err := u.getUserByID(ctx, lsc.User().UserID)
 	if err != nil {
@@ -279,7 +278,7 @@ func (u *usersAPI) SearchUsers(ctx context.Context, params operation.SearchUsers
 	if total == 0 {
 		return operation.NewSearchUsersOK().WithXTotalCount(0).WithPayload([]*models.UserSearchRespItem{})
 	}
-	l, err := u.ctl.List(ctx, query)
+	l, err := u.ctl.SearchByName(ctx, params.Username, int(*params.PageSize))
 	if err != nil {
 		return u.SendError(ctx, err)
 	}
@@ -288,9 +287,6 @@ func (u *usersAPI) SearchUsers(ctx context.Context, params operation.SearchUsers
 		m := &model.User{User: us}
 		result = append(result, m.ToSearchRespItem())
 	}
-	sort.Slice(result, func(i, j int) bool {
-		return utils.MostMatchSorter(result[i].Username, result[j].Username, params.Username)
-	})
 	return operation.NewSearchUsersOK().
 		WithXTotalCount(total).
 		WithPayload(result).
@@ -302,8 +298,8 @@ func (u *usersAPI) UpdateUserPassword(ctx context.Context, params operation.Upda
 	if err := u.requireModifiable(ctx, uid); err != nil {
 		return u.SendError(ctx, err)
 	}
-	sctx, _ := security.FromContext(ctx)
-	if matchUserID(sctx, uid) {
+	if matchUserID(ctx, uid) {
+		sctx, _ := security.FromContext(ctx)
 		ok, err := u.ctl.VerifyPassword(ctx, sctx.GetUsername(), params.Password.OldPassword)
 		if err != nil {
 			log.G(ctx).Errorf("Failed to verify password for user: %s, error: %v", sctx.GetUsername(), err)
@@ -324,7 +320,7 @@ func (u *usersAPI) UpdateUserPassword(ctx context.Context, params operation.Upda
 	}
 	ok, err := u.ctl.VerifyPassword(ctx, user.Username, newPwd)
 	if err != nil {
-		log.G(ctx).Errorf("Failed to verify password for user: %s, error: %v", sctx.GetUsername(), err)
+		log.G(ctx).Errorf("Failed to verify password for user: %s, error: %v", user.Username, err)
 		return u.SendError(ctx, errors.UnknownError(nil).WithMessage("Failed to verify password"))
 	}
 	if ok {
@@ -356,16 +352,12 @@ func (u *usersAPI) requireForCLISecret(ctx context.Context, id int) error {
 		return err
 	}
 	if a != common.OIDCAuth {
-		return errors.PreconditionFailedError(nil).WithMessage("unable to update CLI secret under authmode: %s", a)
+		return errors.PreconditionFailedError(nil).WithMessagef("unable to update CLI secret under authmode: %s", a)
 	}
-	sctx, ok := security.FromContext(ctx)
-	if !ok || !sctx.IsAuthenticated() {
-		return errors.UnauthorizedError(nil)
+	if matchUserID(ctx, id) {
+		return nil
 	}
-	if !matchUserID(sctx, id) && !sctx.Can(ctx, rbac.ActionUpdate, rbac.ResourceUser) {
-		return errors.ForbiddenError(nil).WithMessage("Not authorized to update the CLI secret for user: %d", id)
-	}
-	return nil
+	return u.RequireSystemAccess(ctx, rbac.ActionUpdate, rbac.ResourceUser)
 }
 
 func (u *usersAPI) requireCreatable(ctx context.Context) error {
@@ -375,7 +367,7 @@ func (u *usersAPI) requireCreatable(ctx context.Context) error {
 		return err
 	}
 	if a != common.DBAuth {
-		return errors.ForbiddenError(nil).WithMessage("creating local user is not allowed under auth mode: %s", a)
+		return errors.ForbiddenError(nil).WithMessagef("creating local user is not allowed under auth mode: %s", a)
 	}
 	sr, err := config.SelfRegistration(ctx)
 	if err != nil {
@@ -393,26 +385,18 @@ func (u *usersAPI) requireCreatable(ctx context.Context) error {
 }
 
 func (u *usersAPI) requireReadable(ctx context.Context, id int) error {
-	sctx, ok := security.FromContext(ctx)
-	if !ok || !sctx.IsAuthenticated() {
-		return errors.UnauthorizedError(nil)
+	if matchUserID(ctx, id) {
+		return nil
 	}
-	if !matchUserID(sctx, id) && !sctx.Can(ctx, rbac.ActionRead, rbac.ResourceUser) {
-		return errors.ForbiddenError(nil).WithMessage("Not authorized to read user: %d", id)
-	}
-	return nil
+	return u.RequireSystemAccess(ctx, rbac.ActionRead, rbac.ResourceUser)
 }
 
 func (u *usersAPI) requireDeletable(ctx context.Context, id int) error {
-	sctx, ok := security.FromContext(ctx)
-	if !ok || !sctx.IsAuthenticated() {
-		return errors.UnauthorizedError(nil)
+	if err := u.RequireSystemAccess(ctx, rbac.ActionDelete, rbac.ResourceUser); err != nil {
+		return err
 	}
-	if !sctx.Can(ctx, rbac.ActionDelete, rbac.ResourceUser) {
-		return errors.ForbiddenError(nil).WithMessage("Not authorized to delete users")
-	}
-	if matchUserID(sctx, id) || id == 1 {
-		return errors.ForbiddenError(nil).WithMessage("User with ID %d cannot be deleted", id)
+	if matchUserID(ctx, id) || id == 1 {
+		return errors.ForbiddenError(nil).WithMessagef("User with ID %d cannot be deleted", id)
 	}
 	return nil
 }
@@ -422,27 +406,22 @@ func (u *usersAPI) requireModifiable(ctx context.Context, id int) error {
 	if err != nil {
 		return err
 	}
-	sctx, ok := security.FromContext(ctx)
-	if !ok || !sctx.IsAuthenticated() {
-		return errors.UnauthorizedError(nil)
-	}
-	if !modifiable(ctx, a, id) {
-		return errors.ForbiddenError(nil).WithMessage("User with ID %d can't be updated", id)
-	}
-	return nil
-}
-
-func modifiable(ctx context.Context, authMode string, id int) bool {
-	sctx, _ := security.FromContext(ctx)
-	if authMode == common.DBAuth {
+	if a == common.DBAuth {
 		// In db auth, admin can update anyone's info, and regular user can update his own
-		return sctx.Can(ctx, rbac.ActionUpdate, rbac.ResourceUser) || matchUserID(sctx, id)
+		if matchUserID(ctx, id) {
+			return nil
+		}
+		return u.RequireSystemAccess(ctx, rbac.ActionUpdate, rbac.ResourceUser)
 	}
 	// In none db auth, only the local admin's password can be updated.
-	return id == 1 && sctx.Can(ctx, rbac.ActionUpdate, rbac.ResourceUser)
+	if id != 1 {
+		return errors.ForbiddenError(nil).WithMessagef("User with ID %d can't be updated", id)
+	}
+	return u.RequireSystemAccess(ctx, rbac.ActionUpdate, rbac.ResourceUser)
 }
 
-func matchUserID(sctx security.Context, id int) bool {
+func matchUserID(ctx context.Context, id int) bool {
+	sctx, _ := security.FromContext(ctx)
 	if localSCtx, ok := sctx.(*local.SecurityContext); ok {
 		return localSCtx.User().UserID == id
 	}

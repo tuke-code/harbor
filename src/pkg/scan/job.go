@@ -304,7 +304,7 @@ func (j *Job) Run(ctx job.Context, params job.Parameters) error {
 
 		reportData, err := handler.PostScan(ctx, req, rp, rawReports[i], startTime, robotAccount)
 		if err != nil {
-			myLogger.Errorf("Failed to convert vulnerability data to new schema for report %s, error %v", rp.UUID, err)
+			myLogger.Errorf("handler failed at PostScan, report %s, error %v", rp.UUID, err)
 			return err
 		}
 
@@ -501,10 +501,10 @@ func extractMimeTypes(params job.Parameters) ([]string, error) {
 		return nil, errors.Errorf("missing job parameter '%s'", JobParameterMimes)
 	}
 
-	l, ok := v.([]interface{})
+	l, ok := v.([]any)
 	if !ok {
 		return nil, errors.Errorf(
-			"malformed job parameter '%s', expecting []interface{} but got %s",
+			"malformed job parameter '%s', expecting []any but got %s",
 			JobParameterMimes,
 			reflect.TypeOf(v).String(),
 		)

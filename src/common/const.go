@@ -119,6 +119,7 @@ const (
 	OIDCExtraRedirectParms           = "oidc_extra_redirect_parms"
 	OIDCScope                        = "oidc_scope"
 	OIDCUserClaim                    = "oidc_user_claim"
+	OIDCLogout                       = "oidc_logout"
 
 	CfgDriverDB                       = "db"
 	NewHarborAdminName                = "admin@harbor.local"
@@ -134,6 +135,7 @@ const (
 	OIDCGroupType                     = 3
 	LDAPGroupAdminDn                  = "ldap_group_admin_dn"
 	LDAPGroupMembershipAttribute      = "ldap_group_membership_attribute"
+	LDAPGroupAttachParallel           = "ldap_group_attach_parallel"
 	DefaultRegistryControllerEndpoint = "http://registryctl:8080"
 	DefaultPortalURL                  = "http://portal:8080"
 	DefaultRegistryCtlURL             = "http://registryctl:8080"
@@ -150,8 +152,9 @@ const (
 
 	OIDCCallbackPath = "/c/oidc/callback"
 	OIDCLoginPath    = "/c/oidc/login"
+	OIDCLoginoutPath = "/c/oidc/logout"
 
-	AuthProxyRediretPath = "/c/authproxy/redirect"
+	AuthProxyRedirectPath = "/c/authproxy/redirect"
 
 	// Global notification enable configuration
 	NotificationEnable = "notification_enable"
@@ -207,7 +210,7 @@ const (
 	// 24h.
 	DefaultCacheExpireHours = 24
 
-	PurgeAuditIncludeOperations = "include_operations"
+	PurgeAuditIncludeEventTypes = "include_event_types"
 	PurgeAuditDryRun            = "dry_run"
 	PurgeAuditRetentionHour     = "audit_retention_hour"
 	// AuditLogForwardEndpoint indicate to forward the audit log to an endpoint
@@ -218,6 +221,9 @@ const (
 	MaxAuditRetentionHour = 240000
 	// ScannerSkipUpdatePullTime
 	ScannerSkipUpdatePullTime = "scanner_skip_update_pulltime"
+
+	// AuditLogEventsDisabled ...
+	AuditLogEventsDisabled = "disabled_audit_log_event_types"
 
 	// SessionTimeout defines the web session timeout
 	SessionTimeout = "session_timeout"
@@ -246,4 +252,13 @@ const (
 
 	// Global Leeway used for token validation
 	JwtLeeway = 60 * time.Second
+
+	// The replication adapter whitelist
+	ReplicationAdapterWhiteList = "REPLICATION_ADAPTER_WHITELIST"
+
+	// UserAgentHeaderName is the HTTP header key for user agent.
+	UserAgentHeaderName = "User-Agent"
+
+	// UserAgent is the default user-agent header for registry client requests
+	UserAgent = "harbor-registry-client"
 )

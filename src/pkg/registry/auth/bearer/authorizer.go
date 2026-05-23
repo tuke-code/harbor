@@ -21,7 +21,9 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/goharbor/harbor/src/common/utils"
 	"github.com/goharbor/harbor/src/lib"
+	"github.com/goharbor/harbor/src/lib/config"
 	"github.com/goharbor/harbor/src/lib/errors"
 )
 
@@ -39,7 +41,10 @@ func NewAuthorizer(realm, service string, a lib.Authorizer, transport http.Round
 		cache:      newCache(cacheCapacity),
 	}
 
-	authorizer.client = &http.Client{Transport: transport}
+	authorizer.client = &http.Client{
+		Transport: transport,
+		Timeout:   config.RegistryHTTPClientTimeout(),
+	}
 	return authorizer
 }
 
@@ -109,6 +114,8 @@ func (a *authorizer) fetchToken(scopes []*scope) (*token, error) {
 	if err != nil {
 		return nil, err
 	}
+	// set user agent to avoid some registry (e.g. docker hub) return 403 when user agent is not set to harbor-registry-client
+	utils.SetUserAgentHeader(req)
 	if a.authorizer != nil {
 		if err = a.authorizer.Modify(req); err != nil {
 			return nil, err
@@ -125,7 +132,6 @@ func (a *authorizer) fetchToken(scopes []*scope) (*token, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		message := fmt.Sprintf("http status code: %d, body: %s", resp.StatusCode, string(body))
 		code := errors.GeneralCode
 		switch resp.StatusCode {
 		case http.StatusUnauthorized:
@@ -134,7 +140,7 @@ func (a *authorizer) fetchToken(scopes []*scope) (*token, error) {
 			code = errors.ForbiddenCode
 		}
 		return nil, errors.New(nil).WithCode(code).
-			WithMessage(message)
+			WithMessagef("http status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 	token := &token{}
 	if err = json.Unmarshal(body, token); err != nil {

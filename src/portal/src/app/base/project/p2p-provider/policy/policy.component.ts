@@ -50,6 +50,7 @@ import {
     ConfirmationButtons,
     ConfirmationState,
     ConfirmationTargets,
+    PAGE_SIZE_OPTIONS,
 } from '../../../../shared/entities/shared.const';
 import { ConfirmationMessage } from '../../../global-confirmation-dialog/confirmation-message';
 import {
@@ -59,6 +60,11 @@ import {
 import { JobserviceService } from '../../../../../../ng-swagger-gen/services/jobservice.service';
 import { ScheduleService } from '../../../../../../ng-swagger-gen/services/schedule.service';
 import { JobType } from '../../../left-side-nav/job-service-dashboard/job-service-dashboard.interface';
+import {
+    SkipSessionRenewalService,
+    skipSessionRenewal,
+} from '../../../../services/skip-session-renewal.service';
+
 // The route path which will display this component
 const URL_TO_DISPLAY: RegExp =
     /\/harbor\/projects\/(\d+)\/p2p-provider\/policies/;
@@ -68,6 +74,7 @@ const URL_TO_DISPLAY: RegExp =
     styleUrls: ['./policy.component.scss'],
 })
 export class PolicyComponent implements OnInit, OnDestroy {
+    clrPageSizeOptions: number[] = PAGE_SIZE_OPTIONS;
     @ViewChild(AddP2pPolicyComponent)
     addP2pPolicyComponent: AddP2pPolicyComponent;
     @ViewChild('confirmationDialogComponent')
@@ -122,7 +129,8 @@ export class PolicyComponent implements OnInit, OnDestroy {
         private userPermissionService: UserPermissionService,
         private preheatService: PreheatService,
         private event: EventService,
-        private scheduleService: ScheduleService
+        private scheduleService: ScheduleService,
+        private skipSessionRenewalService: SkipSessionRenewalService
     ) {}
 
     ngOnInit() {
@@ -480,6 +488,13 @@ export class PolicyComponent implements OnInit, OnDestroy {
                 this.addP2pPolicyComponent.triggerType = trigger.type;
                 this.addP2pPolicyComponent.cron = trigger.trigger_setting.cron;
             }
+            if (this.addP2pPolicyComponent.policy.extra_attrs) {
+                const { scope = '', cluster_ids = [] } = JSON.parse(
+                    this.addP2pPolicyComponent.policy.extra_attrs
+                );
+                this.addP2pPolicyComponent.scope = scope;
+                this.addP2pPolicyComponent.clusterIDs = cluster_ids.join(',');
+            }
             this.addP2pPolicyComponent.currentForm.reset({
                 provider: this.addP2pPolicyComponent.policy.provider_id,
                 name: this.addP2pPolicyComponent.policy.name,
@@ -490,6 +505,8 @@ export class PolicyComponent implements OnInit, OnDestroy {
                 severity: this.addP2pPolicyComponent.severity,
                 label: this.addP2pPolicyComponent.labels,
                 triggerType: this.addP2pPolicyComponent.triggerType,
+                scope: this.addP2pPolicyComponent.scope,
+                clusterIDs: this.addP2pPolicyComponent.clusterIDs,
             });
             this.addP2pPolicyComponent.originPolicyForEdit = clone(
                 this.selectedRow
@@ -508,6 +525,10 @@ export class PolicyComponent implements OnInit, OnDestroy {
                 this.addP2pPolicyComponent.triggerType;
             this.addP2pPolicyComponent.originCronForEdit =
                 this.addP2pPolicyComponent.cron;
+            this.addP2pPolicyComponent.originScopeForEdit =
+                this.addP2pPolicyComponent.scope;
+            this.addP2pPolicyComponent.originClusterIDsForEdit =
+                this.addP2pPolicyComponent.clusterIDs;
         }
     }
 
@@ -591,6 +612,7 @@ export class PolicyComponent implements OnInit, OnDestroy {
                     pageSize: this.pageSize,
                     q: params,
                 })
+                .pipe(skipSessionRenewal(this.skipSessionRenewalService))
                 .pipe(finalize(() => (this.jobsLoading = false)))
                 .subscribe(
                     response => {

@@ -20,7 +20,9 @@ import (
 	"io"
 
 	"github.com/docker/distribution"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
+	"github.com/goharbor/harbor/src/lib"
 	"github.com/goharbor/harbor/src/pkg/reg"
 	"github.com/goharbor/harbor/src/pkg/reg/adapter"
 	"github.com/goharbor/harbor/src/pkg/reg/model"
@@ -32,10 +34,12 @@ type RemoteInterface interface {
 	BlobReader(repo, dig string) (int64, io.ReadCloser, error)
 	// Manifest get manifest by reference
 	Manifest(repo string, ref string) (distribution.Manifest, string, error)
-	// ManifestExist checks manifest exist, if exist, return digest
+	// ManifestExist checks manifest exist, if exist, returns digest
 	ManifestExist(repo string, ref string) (bool, *distribution.Descriptor, error)
 	// ListTags returns all tags of the repo
 	ListTags(repo string) ([]string, error)
+	// ListReferrers returns all referrers
+	ListReferrers(repo string, digest string, rawQuery string) (*ocispec.Index, map[string][]string, error)
 }
 
 // remoteHelper defines operations related to remote repository under proxy
@@ -43,13 +47,16 @@ type remoteHelper struct {
 	regID       int64
 	registry    adapter.ArtifactRegistry
 	registryMgr reg.Manager
+	opts        *Options
 }
 
 // NewRemoteHelper create a remote interface
-func NewRemoteHelper(ctx context.Context, regID int64) (RemoteInterface, error) {
+func NewRemoteHelper(ctx context.Context, regID int64, opts ...Option) (RemoteInterface, error) {
 	r := &remoteHelper{
 		regID:       regID,
-		registryMgr: reg.Mgr}
+		registryMgr: reg.Mgr,
+		opts:        NewOptions(opts...),
+	}
 	if err := r.init(ctx); err != nil {
 		return nil, err
 	}
@@ -83,7 +90,14 @@ func (r *remoteHelper) init(ctx context.Context) error {
 }
 
 func (r *remoteHelper) BlobReader(repo, dig string) (int64, io.ReadCloser, error) {
-	return r.registry.PullBlob(repo, dig)
+	sz, bReader, err := r.registry.PullBlob(repo, dig)
+	if err != nil {
+		return 0, nil, err
+	}
+	if r.opts != nil && r.opts.Speed > 0 {
+		bReader = lib.NewReader(bReader, r.opts.Speed)
+	}
+	return sz, bReader, err
 }
 
 func (r *remoteHelper) Manifest(repo string, ref string) (distribution.Manifest, string, error) {
@@ -96,4 +110,8 @@ func (r *remoteHelper) ManifestExist(repo string, ref string) (bool, *distributi
 
 func (r *remoteHelper) ListTags(repo string) ([]string, error) {
 	return r.registry.ListTags(repo)
+}
+
+func (r *remoteHelper) ListReferrers(repo string, digest string, rawQuery string) (*ocispec.Index, map[string][]string, error) {
+	return r.registry.ListReferrers(repo, digest, rawQuery)
 }

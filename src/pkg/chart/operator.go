@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"gopkg.in/yaml.v2"
 	helm_chart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
@@ -30,8 +31,9 @@ var (
 )
 
 const (
-	readmeFileName = "README.MD"
-	valuesFileName = "VALUES.YAML"
+	readmeFileName       = "README.MD"
+	valuesFileName       = "VALUES.YAML"
+	dependenciesFileName = "REQUIREMENTS.YAML"
 )
 
 // Operator ...
@@ -64,11 +66,11 @@ func (cho *operator) GetDetails(content []byte) (*VersionDetails, error) {
 	depts := make([]*helm_chart.Dependency, 0)
 
 	// for APIVersionV2, the dependency is in the Chart.yaml
-	if chartData.Metadata.APIVersion == helm_chart.APIVersionV1 {
+	if chartData.Metadata.APIVersion == helm_chart.APIVersionV2 {
 		depts = chartData.Metadata.Dependencies
 	}
 
-	var values map[string]interface{}
+	var values map[string]any
 	files := make(map[string]string)
 	// Parse values
 	if chartData.Values != nil {
@@ -77,10 +79,26 @@ func (cho *operator) GetDetails(content []byte) (*VersionDetails, error) {
 
 	// Append other files like 'README.md' 'values.yaml'
 	for _, v := range chartData.Raw {
+		// for APIVersionV1, the dependency is in the requirements.yaml
+		if strings.ToUpper(v.Name) == dependenciesFileName && chartData.Metadata.APIVersion == helm_chart.APIVersionV1 {
+			depMap := make(map[string][]*helm_chart.Dependency)
+			if err := yaml.Unmarshal(v.Data, &depMap); err != nil {
+				return nil, err
+			}
+
+			deps, ok := depMap["dependencies"]
+			if !ok {
+				return nil, errors.New("invalid requirements.yaml, no dependencies found")
+			}
+			depts = deps
+			continue
+		}
+
 		if strings.ToUpper(v.Name) == readmeFileName {
 			files[readmeFileName] = string(v.Data)
 			continue
 		}
+
 		if strings.ToUpper(v.Name) == valuesFileName {
 			files[valuesFileName] = string(v.Data)
 			continue
@@ -112,14 +130,14 @@ func (cho *operator) GetData(content []byte) (*helm_chart.Chart, error) {
 }
 
 // Recursively read value
-func readValue(values map[string]interface{}, keyPrefix string, valueMap map[string]interface{}) {
+func readValue(values map[string]any, keyPrefix string, valueMap map[string]any) {
 	for key, value := range values {
 		longKey := key
 		if keyPrefix != "" {
 			longKey = fmt.Sprintf("%s.%s", keyPrefix, key)
 		}
 
-		if subValues, ok := value.(map[string]interface{}); ok {
+		if subValues, ok := value.(map[string]any); ok {
 			readValue(subValues, longKey, valueMap)
 		} else {
 			valueMap[longKey] = value

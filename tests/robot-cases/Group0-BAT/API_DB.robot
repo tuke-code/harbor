@@ -120,6 +120,14 @@ Test Case - Stop Scan All Images
     [Tags]  stop_scan_all
     Harbor API Test  ./tests/apitests/python/test_system_level_stop_scan_all.py
 
+Test Case - Generate SBOM Of An Image
+    [Tags]  generate_sbom
+    Harbor API Test  ./tests/apitests/python/test_sbom_generation_of_image_artifact.py
+
+Test Case - Stop Generating SBOM Of An Image
+    [Tags]  stop_generating_sbom
+    Harbor API Test  ./tests/apitests/python/test_stop_sbom_generation_of_image_artifact.py
+
 Test Case - Registry API
     [Tags]  reg_api
     Harbor API Test  ./tests/apitests/python/test_registry_api.py
@@ -137,8 +145,16 @@ Test Case - Replication From Dockerhub
     Harbor API Test  ./tests/apitests/python/test_replication_from_dockerhub.py
 
 Test Case - Proxy Cache
-    [Tags]  proxy_cache
+    [Tags]  proxy_cache_from_harbor
     Harbor API Test  ./tests/apitests/python/test_proxy_cache.py
+
+Test Case - Proxy Cache From Dockerhub
+    [Tags]  proxy_cache_from_dockerhub
+    Harbor API Test  ./tests/apitests/python/test_proxy_cache.py  PROXY_UPSTREAM_LIST=docker-hub
+
+Test Case - Proxy Cache From JFrog
+    [Tags]  proxy_cache_from_jfrog
+    Harbor API Test  ./tests/apitests/python/test_proxy_cache.py  PROXY_UPSTREAM_LIST=jfrog-artifactory
 
 Test Case - Tag Immutability
     [Tags]  tag_immutability

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package image
+package image // nolint:revive
 
 import (
 	"errors"
@@ -30,6 +30,7 @@ import (
 
 	common_http "github.com/goharbor/harbor/src/common/http"
 	trans "github.com/goharbor/harbor/src/controller/replication/transfer"
+	"github.com/goharbor/harbor/src/lib"
 	"github.com/goharbor/harbor/src/lib/log"
 	"github.com/goharbor/harbor/src/pkg/reg/adapter"
 	"github.com/goharbor/harbor/src/pkg/reg/model"
@@ -380,7 +381,7 @@ func (t *transfer) copyBlobByMonolithic(srcRepo, dstRepo, digest string, sizeFro
 		return err
 	}
 	if speed > 0 {
-		data = trans.NewReader(data, speed)
+		data = lib.NewReader(data, speed)
 	}
 	defer data.Close()
 	// get size 0 from PullBlob, use size from distribution.Descriptor instead.
@@ -402,11 +403,6 @@ func (t *transfer) copyBlobByMonolithic(srcRepo, dstRepo, digest string, sizeFro
 // copyBlobByChunk copy blob by chunk with specified start and end range.
 // The <range> refers to the byte range of the chunk, and MUST be inclusive on both ends. The first chunk's range MUST begin with 0.
 func (t *transfer) copyBlobByChunk(srcRepo, dstRepo, digest string, sizeFromDescriptor int64, start, end *int64, location *string, speed int32) error {
-	// fallback to copy by monolithic if the blob size is equal or less than chunk size.
-	if sizeFromDescriptor <= replicationChunkSize {
-		return t.copyBlobByMonolithic(srcRepo, dstRepo, digest, sizeFromDescriptor, speed)
-	}
-
 	mounted, err := t.tryMountBlob(srcRepo, dstRepo, digest)
 	if err != nil {
 		return err
@@ -416,16 +412,18 @@ func (t *transfer) copyBlobByChunk(srcRepo, dstRepo, digest string, sizeFromDesc
 		return nil
 	}
 
+	// fallback to copy by monolithic if the blob size is equal or less than chunk size.
+	if sizeFromDescriptor <= replicationChunkSize {
+		return t.copyBlobByMonolithic(srcRepo, dstRepo, digest, sizeFromDescriptor, speed)
+	}
+
 	// end range should equal (blobSize - 1)
 	endRange := sizeFromDescriptor - 1
 	for {
 		// update the start and end for upload
 		*start = *end + 1
 		// since both ends are closed intervals, it is necessary to subtract one byte
-		*end = *start + replicationChunkSize - 1
-		if *end >= endRange {
-			*end = endRange
-		}
+		*end = min(*start+replicationChunkSize-1, endRange)
 
 		t.logger.Infof("copying the blob chunk: %d-%d/%d", *start, *end, sizeFromDescriptor)
 		_, data, err := t.src.PullBlobChunk(srcRepo, digest, sizeFromDescriptor, *start, *end)
@@ -435,7 +433,7 @@ func (t *transfer) copyBlobByChunk(srcRepo, dstRepo, digest string, sizeFromDesc
 		}
 
 		if speed > 0 {
-			data = trans.NewReader(data, speed)
+			data = lib.NewReader(data, speed)
 		}
 		// failureEnd will only be used for adjusting content range when issue happened during push the chunk.
 		var failureEnd int64
